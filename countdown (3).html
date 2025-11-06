@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CONTADOR</title>
+<style>
+  :root{--bg:#0b132b;--fg:#e7eef7;--muted:#94a3b8;--accent:#60a5fa;}
+  html,body{height:100%;margin:0}
+  body{
+    background: radial-gradient(1100px 700px at 50% -20%, #0f1a2e 0%, #0b132b 60%);
+    color:var(--fg);
+    display:grid; place-items:center;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+  .wrap{text-align:center;padding:28px;}
+  h1{
+    margin:0 0 18px; letter-spacing:0.22em;
+    font-weight:800; font-size: clamp(18px, 3.2vw, 26px);
+    color: var(--muted);
+  }
+  .timer{
+    display:inline-flex; align-items:center; gap:min(1.2vw,14px);
+    background:rgba(255,255,255,0.04);
+    border:1px solid rgba(255,255,255,0.06);
+    border-radius:22px; padding:18px 22px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.25);
+  }
+  .unit{display:flex; gap:6px;}
+  .digit{
+    width:clamp(28px, 6.8vw, 54px);
+    height:clamp(40px, 9.8vw, 78px);
+    background:#0f1a2e;
+    border:1px solid rgba(255,255,255,.06);
+    border-radius:12px;
+    display:grid; place-items:center;
+    font-weight:800; font-size: clamp(22px, 5.8vw, 46px); line-height:1;
+    position:relative; overflow:hidden;
+  }
+  .sep{
+    display:grid; place-items:center; padding:0 2px;
+    font-weight:800; font-size: clamp(18px, 3.8vw, 30px); color: var(--accent);
+    opacity:.9;
+  }
+
+  .digit .next, .digit .cur{
+    position:absolute; left:0; right:0;
+    display:grid; place-items:center; height:100%;
+  }
+  .digit .cur{ transform: translateY(0); opacity:1; }
+  .digit .next{ transform: translateY(100%); opacity:0; }
+
+  .digit.change .cur{ animation: goUp .28s ease forwards; }
+  .digit.change .next{ animation: comeUp .28s ease forwards; }
+
+  @keyframes goUp{ to{ transform: translateY(-100%); opacity:0; } }
+  @keyframes comeUp{ to{ transform: translateY(0%); opacity:1; } }
+
+  /* hidden state when < 24h */
+  .hide{ display:none !important; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>CONTADOR</h1>
+    <div class="timer" aria-live="polite" aria-label="Contagem regressiva">
+      <div class="unit" id="DD"></div>
+      <div class="sep" id="SEP1">:</div>
+      <div class="unit" id="HH"></div>
+      <div class="sep">:</div>
+      <div class="unit" id="MM"></div>
+      <div class="sep">:</div>
+      <div class="unit" id="SS"></div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const qs = new URLSearchParams(location.search);
+  const fallback = "2025-11-07T18:00:00-03:00";
+  const targetStr = qs.get("t") || fallback;
+  const target = new Date(targetStr);
+
+  function mkDigit(){
+    const d = document.createElement("div");
+    d.className = "digit";
+    const cur = document.createElement("div");
+    const next = document.createElement("div");
+    cur.className = "cur"; next.className = "next";
+    cur.textContent = "0"; next.textContent = "0";
+    d.appendChild(cur); d.appendChild(next);
+    return d;
+  }
+  function setVal(digit, val){
+    const cur = digit.querySelector(".cur");
+    const next = digit.querySelector(".next");
+    if (cur.textContent === String(val)) return;
+    next.textContent = String(val);
+    digit.classList.add("change");
+    const onEnd = () => {
+      cur.textContent = next.textContent;
+      digit.classList.remove("change");
+      digit.removeEventListener("animationend", onEnd);
+    };
+    digit.addEventListener("animationend", onEnd);
+  }
+  function two(n){ return String(n).padStart(2,"0"); }
+  function twoDigits(int){ const s = two(int); return [s[0], s[1]]; }
+
+  const DD = document.getElementById("DD");
+  const HH = document.getElementById("HH");
+  const MM = document.getElementById("MM");
+  const SS = document.getElementById("SS");
+  const SEP1 = document.getElementById("SEP1");
+  const nodes = {
+    D: [mkDigit(), mkDigit()],
+    H: [mkDigit(), mkDigit()],
+    M: [mkDigit(), mkDigit()],
+    S: [mkDigit(), mkDigit()],
+  };
+  DD.appendChild(nodes.D[0]); DD.appendChild(nodes.D[1]);
+  HH.appendChild(nodes.H[0]); HH.appendChild(nodes.H[1]);
+  MM.appendChild(nodes.M[0]); MM.appendChild(nodes.M[1]);
+  SS.appendChild(nodes.S[0]); SS.appendChild(nodes.S[1]);
+
+  function render(sec){
+    if (sec < 0) sec = 0;
+    const d = Math.floor(sec / 86400);
+    const h = Math.floor((sec % 86400) / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+
+    const [d1,d2] = twoDigits(d);
+    const [h1,h2] = twoDigits(h);
+    const [m1,m2] = twoDigits(m);
+    const [s1,s2] = twoDigits(s);
+
+    setVal(nodes.D[0], d1); setVal(nodes.D[1], d2);
+    setVal(nodes.H[0], h1); setVal(nodes.H[1], h2);
+    setVal(nodes.M[0], m1); setVal(nodes.M[1], m2);
+    setVal(nodes.S[0], s1); setVal(nodes.S[1], s2);
+
+    // Auto-hide days and first colon when under 24h
+    if (d === 0){
+      DD.classList.add("hide");
+      SEP1.classList.add("hide");
+    } else {
+      DD.classList.remove("hide");
+      SEP1.classList.remove("hide");
+    }
+  }
+
+  function tick(){
+    if (isNaN(target.getTime())){ return; }
+    const now = new Date();
+    const diff = Math.max(0, Math.floor((target.getTime() - now.getTime()) / 1000));
+    render(diff);
+    if (diff === 0) return;
+    requestAnimationFrame(()=>setTimeout(tick, 250));
+  }
+  tick();
+})();
+</script>
+</body>
+</html>
